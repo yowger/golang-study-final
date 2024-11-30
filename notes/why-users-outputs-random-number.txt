@@ -1,0 +1,60 @@
+When you print `users` directly in this line:
+
+```go
+fmt.Println("users: ", users)
+```
+
+The output appears as "random numbers" because `users` is a map, and when you print a map directly, Go's default `fmt` behavior outputs the map's memory address representation for its values. This is why you see output like:
+
+```
+users: map[1:0xc0000a0020]
+```
+
+Here, `0xc0000a0020` is the memory address of the `user` struct stored in the map.
+
+### Solution: Print the Actual Data
+To print the actual data, you need to iterate through the map and format the output to show the fields of the `user` struct.
+
+#### Example of Printing the Real Data
+```go
+fmt.Println("users: ")
+for id, user := range users {
+    fmt.Printf("ID: %d, Name: %s\n", id, user.Name)
+}
+```
+
+This will output something like:
+```
+users: 
+ID: 1, Name: John Doe
+ID: 2, Name: Jane Smith
+```
+
+### Why Iterate Through the Map?
+Maps in Go store values by reference (in this case, pointers to the `user` struct), and printing the map directly doesn't automatically dereference those pointers. Iterating through the map allows you to access and print the actual data in the struct.
+
+### Alternative: Use `json.MarshalIndent` for Pretty Printing
+If you want to print the entire `users` map as a JSON-like structure:
+
+```go
+import "encoding/json"
+
+data, _ := json.MarshalIndent(users, "", "  ")
+fmt.Println("users: ", string(data))
+```
+
+This will output something like:
+```json
+users: {
+  "1": {
+    "ID": 1,
+    "Name": "John Doe"
+  },
+  "2": {
+    "ID": 2,
+    "Name": "Jane Smith"
+  }
+}
+```
+
+This approach is especially useful for debugging, as it gives a clear and human-readable representation of the data.

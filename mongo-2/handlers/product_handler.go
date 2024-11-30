@@ -22,11 +22,19 @@ func (h *ProductHandler) CreateProduct(c echo.Context) error {
 	defer cancel()
 
 	var product models.Product
+	// validate request body
 	if err := c.Bind(&product); err != nil {
 		fmt.Println("error binding product", err)
 		fmt.Println("Product", product)
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
+
+	/*
+		validator here
+		if validationErr := validate.Struct(&user); validationErr != nil {
+		return c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &echo.Map{"data": validationErr.Error()}})
+		}
+	*/
 
 	fmt.Println("still here baby")
 
@@ -43,13 +51,16 @@ func (h *ProductHandler) GetProducts(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	projection := bson.M{
-		"_id": 0,
-	}
+	// projection := bson.M{
+	// 	"_id": 0,
+	// }
+	projection := bson.M{}
 	cursor, err := h.Collection.Find(ctx, bson.M{}, options.Find().SetProjection(projection))
+
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}
+
 	defer cursor.Close(ctx)
 
 	fmt.Println("cursor", cursor)
