@@ -18,9 +18,10 @@ type (
 )
 
 var (
-	users = map[int]*user{}
-	seq   = 1
-	lock  = sync.Mutex{}
+	users          = map[int]*user{}
+	seq            = 1
+	lock           = sync.Mutex{}
+	allowedOrigins = []string{"https://labstack.com", "https://labstack.net"}
 )
 
 func createUser(c echo.Context) error {
@@ -32,7 +33,6 @@ func createUser(c echo.Context) error {
 	u := &user{
 		ID: seq,
 	}
-
 	if err := c.Bind(u); err != nil {
 		return err
 	}
@@ -51,10 +51,17 @@ func getUserByID(c echo.Context) error {
 
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		fmt.Println("Invalid user ID error: ", err)
+
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid user ID"})
 	}
 
-	return c.JSON(http.StatusOK, users[id])
+	user, exists := users[id]
+	if !exists {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "User not found"})
+	}
+
+	return c.JSON(http.StatusOK, user)
 }
 
 func getAllUsers(c echo.Context) error {
@@ -64,15 +71,53 @@ func getAllUsers(c echo.Context) error {
 	return c.JSON(http.StatusOK, users)
 }
 
+func updateUserByID(c echo.Context) error {
+	lock.Lock()
+	defer lock.Unlock()
+
+	u := new(user)
+	if err := c.Bind(u); err != nil {
+		return err
+	}
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		fmt.Println("Invalid user ID error: ", err)
+
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid user ID"})
+	}
+
+	users[id].Name = u.Name
+
+	return c.JSON(http.StatusOK, users[id])
+}
+
+func deleteUserByID(c echo.Context) error {
+	lock.Lock()
+	defer lock.Unlock()
+
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	delete(users, id)
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 func main() {
 	e := echo.New()
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: allowedOrigins,
+		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+	}))
 
-	e.POST("/", createUser)
-	e.GET("/:id", getUserByID)
-	e.GET("/", getAllUsers)
+	e.GET("/users", getAllUsers)
+	e.POST("/users", createUser)
+	e.GET("/users/:id", getUserByID)
+	e.PUT("/users/:id", updateUserByID)
+	e.DELETE("/users/:id", deleteUserByID)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }
