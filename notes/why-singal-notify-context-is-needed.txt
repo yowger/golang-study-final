@@ -1,0 +1,60 @@
+Here's an explanation of your concerns:
+
+---
+
+### **Why does the server stop if you don't use `signal.NotifyContext`?**
+
+If you don't use `signal.NotifyContext` (or any mechanism to wait for system signals or handle shutdown gracefully), your program will stop **immediately** after the `main` function completes. 
+
+In the example above:
+
+1. Without `signal.NotifyContext` or any blocking operation after launching the server in a goroutine, the `main` function ends after `fmt.Println("START THIS SERVER BABY!")`.
+2. When the `main` function ends, the Go runtime terminates the program, including any running goroutines (like your server).
+
+The `signal.NotifyContext` blocks execution with `<-ctx.Done()`, keeping the program alive until a termination signal (e.g., `Ctrl+C`) is received.
+
+---
+
+### **Does `signal.NotifyContext` keep the server running?**
+
+Yes, indirectly. `signal.NotifyContext` doesn't keep the server running by itself but ensures that your **main thread** is blocked until a termination signal (like `os.Interrupt` or `SIGTERM`) is received.
+
+- The server keeps running because `e.Start` is running inside a **goroutine**.
+- `<-ctx.Done()` keeps the **main thread** alive, waiting for the signal. This prevents the program from exiting and terminating all goroutines prematurely.
+
+---
+
+### **Is a goroutine the same as a thread?**
+
+No, but they are related concepts:
+
+1. **Goroutine:**
+   - A goroutine is a lightweight, managed thread in Go. 
+   - The Go runtime handles scheduling goroutines across available OS threads.
+   - Goroutines are more memory-efficient and faster to create than OS threads.
+
+2. **Thread:**
+   - A thread is a lower-level concept managed by the operating system.
+   - Threads are used to execute tasks concurrently, but they are heavier and less flexible than goroutines.
+
+When you use `go func() { e.Start(...) }`, you're creating a goroutine that runs on an underlying OS thread managed by the Go runtime.
+
+---
+
+### **Why does `<-ctx.Done()` matter?**
+
+The `<-ctx.Done()` statement makes the main thread wait for the context to be "done," which happens when:
+
+1. A signal like `os.Interrupt` (from `Ctrl+C`) is received.
+2. You manually call `stop()` (the deferred cancel function).
+
+Without it, the main function would exit, and the program would terminate, killing all running goroutines, including your server.
+
+---
+
+### **Summary**
+
+- **`signal.NotifyContext`** listens for OS signals (e.g., `Ctrl+C`) and ensures the main thread blocks until the signal is received, keeping the program alive.
+- The server runs in a **goroutine**, but the **main thread** must remain alive to keep the server running.
+- `<-ctx.Done()` keeps the main thread alive by blocking it until the termination signal is received.
+- Goroutines are lightweight abstractions managed by Go, not the OS, while threads are managed by the OS.

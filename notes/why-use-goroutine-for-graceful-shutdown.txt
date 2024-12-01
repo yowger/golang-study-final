@@ -1,0 +1,63 @@
+Using a **goroutine** for the server startup in a graceful shutdown scenario is essential because the server runs as a blocking operation, meaning it would prevent other parts of the program (like signal handling) from executing if it runs in the main thread.
+
+Here's why a goroutine is necessary:
+
+---
+
+### 1. **Server Start (`e.Start`) is Blocking**
+- The `e.Start(":1323")` function starts the Echo server and listens for incoming requests.
+- It blocks the execution of the program until the server is stopped or an error occurs.
+- If this is executed on the main thread, the program will not proceed to the code responsible for listening for shutdown signals.
+
+### 2. **Concurrent Signal Handling**
+- By running `e.Start` in a goroutine, the main thread remains free to listen for OS signals (e.g., `SIGINT`, `SIGTERM`).
+- This allows your application to respond to shutdown events (via `signal.NotifyContext`) without being blocked by the running server.
+
+### 3. **Graceful Shutdown Workflow**
+- When an interrupt signal is received, the `<-ctx.Done()` line unblocks the main thread.
+- The server is then gracefully shut down using `e.Shutdown(ctx)`.
+
+### 4. **Non-Blocking Design**
+- Goroutines allow you to run `e.Start` and signal handling simultaneously without blocking each other.
+- This design adheres to the Go philosophy of managing concurrency with lightweight goroutines.
+
+---
+
+### What Happens Without a Goroutine?
+
+If you don’t use a goroutine for `e.Start`, the program will look like this:
+
+```go
+func main() {
+    e := echo.New()
+    e.GET("/", func(c echo.Context) error {
+        return c.String(http.StatusOK, "OK")
+    })
+
+    if err := e.Start(":1323"); err != nil && err != http.ErrServerClosed {
+        e.Logger.Fatal("shutting down the server")
+    }
+
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+    defer stop()
+
+    <-ctx.Done()
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    if err := e.Shutdown(ctx); err != nil {
+        e.Logger.Fatal(err)
+    }
+}
+```
+
+- The program will **never reach** the signal handling code (`<-ctx.Done()`) because `e.Start` is blocking.
+- As a result, your server won’t handle shutdown signals gracefully and might terminate abruptly.
+
+---
+
+### Summary of Why a Goroutine is Used
+- **Keeps the Main Thread Free**: The main thread can wait for signals and handle shutdown logic.
+- **Allows Concurrent Operations**: `e.Start` and `signal.NotifyContext` can run in parallel.
+- **Essential for Graceful Shutdown**: Without a goroutine, shutdown logic won’t execute until the server stops, which defeats the purpose of graceful shutdown.
+
+By using a goroutine for server startup, you enable non-blocking execution and ensure your application remains responsive to termination signals.

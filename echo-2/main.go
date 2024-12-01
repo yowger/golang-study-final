@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -119,5 +123,27 @@ func main() {
 	e.PUT("/users/:id", updateUserByID)
 	e.DELETE("/users/:id", deleteUserByID)
 
-	e.Logger.Fatal(e.Start(":8080"))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	go func() {
+		err := e.Start(":8080")
+		if err != nil && err != http.ErrServerClosed {
+			e.Logger.Fatal("shutting down the server", err)
+		}
+	}()
+
+	fmt.Println("START THIS SERVER BABY!")
+
+	// keeps program alive unless terminate signal
+	<-ctx.Done()
+
+	fmt.Println("Server shutdown gracefully")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal(err)
+	}
+
 }

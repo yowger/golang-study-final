@@ -1,6 +1,10 @@
 ## helpful links
-https://medium.com/@dsilverdi/graceful-shutdown-in-go-a-polite-way-to-end-programs-6af16e025549
+1. https://medium.com/@dsilverdi/graceful-shutdown-in-go-a-polite-way-to-end-programs-6af16e025549
+2. https://www.freecodecamp.org/news/graceful-shutdowns-k8s-go/
+3. https://dev.to/antonkuklin/golang-graceful-shutdown-3n6d
 
+SIGNALS:
+1. https://en.wikipedia.org/wiki/Signal_(IPC)
 
 ### Does Echo Need Graceful Shutdown?
 
