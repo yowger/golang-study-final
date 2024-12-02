@@ -1,0 +1,52 @@
+The `os.Exit(1)` is used to immediately terminate the program with a non-zero exit code, which typically indicates an error. Let's break down the purpose and impact of using `os.Exit(1)` in the code:
+
+### Purpose of `os.Exit(1)`:
+
+- **Error Handling:** The exit status code `1` signifies that the program encountered an error. In the example you provided, if the `getAllUsers` function returns an error, the program prints the error to standard error (`os.Stderr`) and exits with a status code of `1`. This convention helps indicate to the operating system or any process monitoring the program that the program didn't complete successfully.
+  
+- **Exit Code Convention:** By convention:
+  - `os.Exit(0)` means the program exited successfully.
+  - `os.Exit(1)` (or any non-zero exit code) indicates that an error occurred. The specific number can be used to signal different types of errors if needed, but `1` is commonly used for general errors.
+
+### What if there's no `os.Exit(1)`?
+
+If you remove `os.Exit(1)` and don't explicitly return from the program after an error, the program will continue executing after printing the error. This can lead to unintended behavior since the program might try to proceed with invalid or incomplete data.
+
+#### For example:
+
+```go
+users, err := getAllUsers(context.Background())
+if err != nil {
+    fmt.Fprintf(os.Stderr, "getAllUsers: %v\n", err)
+    // No os.Exit(1) here
+}
+
+// Code continues executing here even if there was an error
+fmt.Println("This will run even if getAllUsers failed")
+```
+
+In this case:
+- The error will still be printed, but the program will continue running as if no error occurred. This can lead to further errors later on or unexpected behavior, especially if the program is relying on the data retrieved from `getAllUsers`.
+
+### When should you use `os.Exit`?
+
+- **For Command-Line Programs:** In command-line programs, it is common to use `os.Exit(1)` to exit with an error status if something goes wrong, signaling to the operating system or the caller that the program did not run as expected.
+  
+- **For Long-Running Applications:** If you're building a long-running server or application (e.g., an HTTP server), you may not want to use `os.Exit` unless it's for critical failure, like a fatal initialization error. For those types of programs, you'll generally want to handle errors more gracefully, logging them, possibly retrying, or continuing to run.
+
+### Graceful Error Handling:
+
+In many cases, especially in long-running applications, you might prefer to handle the error more gracefully, logging it and allowing the program to recover or perform a fallback action instead of terminating immediately.
+
+```go
+users, err := getAllUsers(context.Background())
+if err != nil {
+    log.Printf("Error retrieving users: %v", err)
+    // Handle the error or recover, maybe retry, or just log
+}
+```
+
+### Conclusion:
+
+- **Use `os.Exit(1)`** when you need to explicitly terminate the program due to an error in a command-line tool or script, signaling failure to the operating system.
+- If you don't want to stop the program immediately, especially in long-running applications, you can log the error and handle it in a more controlled manner without exiting.
