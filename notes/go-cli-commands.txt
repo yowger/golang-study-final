@@ -1,0 +1,4 @@
+remove package
+    $go clean -i -x github.com/gorilla/mux
+install package
+$go get -x github.com/gorilla/mux
