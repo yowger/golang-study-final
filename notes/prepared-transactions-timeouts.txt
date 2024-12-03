@@ -1,0 +1,134 @@
+### **Prepared Statements**
+
+#### What Are Prepared Statements?
+A **prepared statement** is a precompiled SQL query. Instead of sending the entire SQL string to the database repeatedly, you define the query once and execute it multiple times with different parameter values. 
+
+- **How it works:**
+  1. The query structure is sent to the database and parsed once.
+  2. Subsequent executions only send the parameters, making the process faster.
+  3. Reduces the risk of SQL injection by safely binding parameters.
+
+#### **When to Use Prepared Statements**
+1. **Performance**:
+   - When executing the same query multiple times with different parameters.
+   - Useful for batch inserts/updates or frequent lookups.
+2. **Security**:
+   - Prevent SQL injection by separating query structure and parameters.
+3. **Maintainability**:
+   - Simplify code by avoiding manual query string concatenation.
+
+#### Example in pgx:
+```go
+ctx := context.Background()
+
+// Prepare a statement
+_, err := pool.Prepare(ctx, "getUserByName", "SELECT id FROM users WHERE name=$1")
+if err != nil {
+	log.Fatalf("Failed to prepare statement: %v", err)
+}
+
+// Execute the prepared statement with parameters
+row := pool.QueryRow(ctx, "getUserByName", "Alice")
+var id int
+if err := row.Scan(&id); err != nil {
+	log.Fatalf("Query failed: %v", err)
+}
+log.Printf("User ID: %d", id)
+```
+
+---
+
+### **Transactions**
+
+#### What Are Transactions?
+A **transaction** groups multiple database operations into a single unit. Either all operations in the transaction succeed, or none of them are applied.
+
+- **ACID Properties**:
+  - **Atomicity**: All changes succeed or are rolled back.
+  - **Consistency**: Database moves from one valid state to another.
+  - **Isolation**: Concurrent transactions do not interfere.
+  - **Durability**: Once committed, changes are permanent.
+
+#### **When to Use Transactions**
+1. **Multiple Dependent Operations**:
+   - When operations depend on each other and need to be atomic.
+   - Example: Deducting money from one account and adding to another in a bank transfer.
+2. **Prevent Partial Updates**:
+   - To avoid leaving the database in an inconsistent state if one operation fails.
+3. **Data Integrity**:
+   - Useful in batch processing where partial failures are unacceptable.
+
+#### Example in pgx:
+```go
+ctx := context.Background()
+tx, err := pool.Begin(ctx)
+if err != nil {
+	log.Fatalf("Failed to begin transaction: %v", err)
+}
+defer tx.Rollback(ctx) // Rollback on failure
+
+// Perform operations within the transaction
+_, err = tx.Exec(ctx, "INSERT INTO accounts (id, balance) VALUES ($1, $2)", 1, 100)
+if err != nil {
+	log.Fatalf("Failed step 1: %v", err)
+}
+
+_, err = tx.Exec(ctx, "UPDATE accounts SET balance = balance - $1 WHERE id = $2", 50, 1)
+if err != nil {
+	log.Fatalf("Failed step 2: %v", err)
+}
+
+// Commit the transaction if all operations succeed
+if err := tx.Commit(ctx); err != nil {
+	log.Fatalf("Failed to commit transaction: %v", err)
+}
+log.Println("Transaction committed successfully!")
+```
+
+---
+
+### **Timeouts**
+
+#### What Are Timeouts?
+Timeouts ensure that operations do not hang indefinitely. They terminate queries that exceed the specified time, allowing the application to recover gracefully.
+
+#### **When to Use Timeouts**
+1. **Slow Queries**:
+   - To limit the impact of a long-running query.
+2. **Client-Side Failures**:
+   - Prevent hanging connections from blocking resources.
+3. **System Resilience**:
+   - Maintain responsiveness by limiting query execution times.
+
+#### Example with Context Timeout:
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+row := pool.QueryRow(ctx, "SELECT id FROM users WHERE name=$1", "Alice")
+var id int
+if err := row.Scan(&id); err != nil {
+	if ctx.Err() == context.DeadlineExceeded {
+		log.Println("Query timeout reached!")
+	} else {
+		log.Fatalf("Query failed: %v", err)
+	}
+}
+```
+
+---
+
+### **Comparison: When to Use What?**
+
+| Feature              | When to Use                                                                                  |
+|----------------------|---------------------------------------------------------------------------------------------|
+| **Prepared Statements** | Repeated queries with different parameters; optimize performance; improve security.          |
+| **Transactions**      | Multiple interdependent operations that should succeed or fail as a unit; ensure consistency. |
+| **Timeouts**          | Limit impact of long-running queries; ensure application remains responsive.                 |
+
+### **Real-World Examples**
+- **Prepared Statements**: User login validation or fetching user details by ID/name.
+- **Transactions**: E-commerce order placement (deduct stock, update order status, record payment).
+- **Timeouts**: API endpoints to query analytics data, ensuring they don't block user interactions.
+
+Each of these features strengthens the robustness, security, and performance of your database interactions in Go.
