@@ -28,4 +28,30 @@ func main() {
 	}
 	defer pool.Close()
 
+	getUsers(pool)
+}
+
+func getUsers(pool *pgxpool.Pool) {
+	ctx := context.Background()
+	rows, err := pool.Query(ctx, "SELECT id, first_name, last_name FROM users")
+	if err != nil {
+		log.Fatalf("Query failed: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id         int
+			first_name string
+			last_name  string
+		)
+		if err := rows.Scan(&id, &first_name, &last_name); err != nil {
+			log.Fatalf("Row scan failed: %v", err)
+		}
+		log.Printf("User ID: %d, first name: %s, last name: %s", id, first_name, last_name)
+	}
+
+	if rows.Err() != nil {
+		log.Fatalf("Rows iteration failed: %v", rows.Err())
+	}
 }
