@@ -5,14 +5,14 @@
 package db
 
 type Gamer struct {
-	ID        int32
-	FirstName string
-	LastName  string
+	ID        int32  `db:"id" json:"id"`
+	FirstName string `db:"first_name" json:"first_name"`
+	LastName  string `db:"last_name" json:"last_name"`
 }
 
 type Todo struct {
-	ID     int32
-	UserID int32
-	Task   string
-	Done   bool
+	ID     int32  `db:"id" json:"id"`
+	UserID int32  `db:"user_id" json:"user_id"`
+	Task   string `db:"task" json:"task"`
+	Done   bool   `db:"done" json:"done"`
 }

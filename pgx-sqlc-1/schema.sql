@@ -5,7 +5,7 @@ CREATE TABLE gamers (
 );
 CREATE TABLE todos (
     id SERIAL PRIMARY KEY,
-    user_id SERIAL NOT NULL REFERENCES users(id),
+    user_id SERIAL NOT NULL REFERENCES gamers(id),
     task TEXT NOT NULL,
     done BOOLEAN NOT NULL
 );
