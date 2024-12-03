@@ -1,0 +1,36 @@
+# example
+# version: "2"  # Version of the sqlc configuration file syntax
+# sql:
+#   - schema: "schema.sql"  # Path to the file containing your database schema (tables, views, etc.)
+#     queries: "queries.sql"  # Path to the file containing your SQL queries
+#     engine: "postgresql"  # Specifies the SQL dialect (e.g., postgresql, mysql)
+#     gen:
+#       go:
+#         package: "db"  # The Go package name for the generated code
+#         out: "internal/db"  # Output directory for generated Go files
+# overrides:  # (Optional) Type overrides for database columns
+#   - go_type: "time.Time"  # Example: Custom type mapping
+#     db_type: "timestamp"
+#     nullable: true
+# rules:  # (Optional) Add validation rules for queries
+#   - name: "no-select-star"
+#     severity: "error"
+#     message: "Avoid using SELECT * in queries"
+# options:  # (Optional) Advanced options
+#   trim_suffix: "ByID"  # Example: Trim suffixes in generated function names
+#   emit_exact_table_names: false
+# plugins: []  # (Optional) List of external plugins for sqlc
+# cloud:  # (Optional) sqlc.cloud integration settings
+#   organization: ""  # Your sqlc.cloud organization name
+#   project: ""  # Your sqlc.cloud project name
+#   hostname: ""  # Custom hostname for sqlc.cloud (if applicable)
+
+version: "2"
+sql:
+  - schema: "schema.sql"
+    queries: "queries.sql"
+    engine: "postgresql"
+    gen:
+        go:
+            package: "db"
+            out: "internal/db"

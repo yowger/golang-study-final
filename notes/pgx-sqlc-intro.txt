@@ -1,0 +1,237 @@
+## link
+https://remvn.dev/posts/writing-raw-sql-easier-with-pgx-and-sqlc-in-go/
+
+Below is a **CRUD example** using `pgx-pool` with `sqlc`. This assumes that you already have a PostgreSQL database and have set up `sqlc` for type-safe query generation.
+
+---
+
+### **Steps to Implement**
+
+1. **Setup `sqlc`**:
+   - Install `sqlc` and configure a `sqlc.yaml` file in your project directory.
+   - Example `sqlc.yaml` configuration:
+     ```yaml
+     version: "2"
+     sql:
+       - schema: "schema.sql"
+         queries: "queries.sql"
+         engine: "postgresql"
+         gen:
+           go: 
+             package: "db"
+             out: "internal/db"
+     ```
+
+2. **Define Schema**:
+   Create a `schema.sql` file:
+   ```sql
+   CREATE TABLE users (
+       id SERIAL PRIMARY KEY,
+       name TEXT NOT NULL,
+       email TEXT NOT NULL UNIQUE,
+       created_at TIMESTAMP DEFAULT now()
+   );
+   ```
+
+3. **Write Queries**:
+   Add a `queries.sql` file for the CRUD operations:
+   ```sql
+   -- name: CreateUser :one
+   INSERT INTO users (name, email)
+   VALUES ($1, $2)
+   RETURNING id, name, email, created_at;
+
+   -- name: GetUserByID :one
+   SELECT id, name, email, created_at
+   FROM users
+   WHERE id = $1;
+
+   -- name: UpdateUserByID :exec
+   UPDATE users
+   SET name = $2, email = $3
+   WHERE id = $1;
+
+   -- name: DeleteUserByID :exec
+   DELETE FROM users
+   WHERE id = $1;
+
+   -- name: ListUsers :many
+   SELECT id, name, email, created_at
+   FROM users
+   ORDER BY created_at DESC;
+   ```
+
+4. **Generate Code with `sqlc`**:
+   Run:
+   ```bash
+   sqlc generate
+   ```
+   This generates Go code for the queries in `internal/db`.
+
+5. **Set Up the Database Connection**:
+   Use `pgx-pool` to connect to the database.
+
+---
+
+### **CRUD Implementation**
+
+Here's a full Go example that integrates everything:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"your_project/internal/db" // Adjust import path to match your project structure
+)
+
+var queries *db.Queries
+
+func main() {
+	// Initialize pgx-pool
+	connStr := os.Getenv("DATABASE_URL") // Example: "postgres://user:password@localhost:5432/dbname"
+	pool, err := pgxpool.New(context.Background(), connStr)
+	if err != nil {
+		log.Fatalf("Unable to connect to database: %v\n", err)
+	}
+	defer pool.Close()
+
+	queries = db.New(pool)
+
+	// Initialize Echo
+	e := echo.New()
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+
+	// Routes
+	e.POST("/users", createUserHandler)
+	e.GET("/users/:id", getUserByIDHandler)
+	e.PUT("/users/:id", updateUserHandler)
+	e.DELETE("/users/:id", deleteUserHandler)
+	e.GET("/users", listUsersHandler)
+
+	// Start the server
+	e.Logger.Fatal(e.Start(":8080"))
+}
+
+func createUserHandler(c echo.Context) error {
+	var req struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	user, err := queries.CreateUser(ctx, db.CreateUserParams{
+		Name:  req.Name,
+		Email: req.Email,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusCreated, user)
+}
+
+func getUserByIDHandler(c echo.Context) error {
+	id, err := c.ParamInt("id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid user ID"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	user, err := queries.GetUserByID(ctx, int32(id))
+	if err != nil {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "User not found"})
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+func updateUserHandler(c echo.Context) error {
+	id, err := c.ParamInt("id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid user ID"})
+	}
+
+	var req struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = queries.UpdateUserByID(ctx, db.UpdateUserByIDParams{
+		ID:    int32(id),
+		Name:  req.Name,
+		Email: req.Email,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"message": "User updated"})
+}
+
+func deleteUserHandler(c echo.Context) error {
+	id, err := c.ParamInt("id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid user ID"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = queries.DeleteUserByID(ctx, int32(id))
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"message": "User deleted"})
+}
+
+func listUsersHandler(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	users, err := queries.ListUsers(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, users)
+}
+```
+
+---
+
+### **Key Points**
+1. **Error Handling**:
+   - Gracefully handle `sqlc` and `pgx` errors.
+2. **Timeouts**:
+   - Use `context.WithTimeout` to manage query execution time.
+3. **`sqlc` Advantages**:
+   - Compile-time safety for SQL queries.
+   - Auto-generated Go structs and methods.
+4. **Echo Framework**:
+   - Lightweight and easy to integrate with PostgreSQL via `pgx` and `sqlc`.
+
+This provides a solid foundation to build a RESTful API with `pgx`, `sqlc`, and PostgreSQL!
