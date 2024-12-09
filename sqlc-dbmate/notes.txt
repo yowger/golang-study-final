@@ -1,0 +1,5 @@
+dbmate up
+
+then 
+
+sqlc generate
