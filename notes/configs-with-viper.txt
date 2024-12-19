@@ -1,0 +1,122 @@
+links:
+	- https://articles.wesionary.team/environment-variable-configuration-in-your-golang-project-using-viper-4e8289ef664d
+	- https://medium.com/outcomeschool/configuration-with-viper-in-go-e49db1b4ff37
+	- https://applegamer22.github.io/posts/go/viper/
+
+Here’s an advanced and reusable Go function for loading and managing environment configurations using the **Viper** library. This function adheres to best practices, like default values and error handling.
+
+### Implementation
+
+```go
+package config
+
+import (
+	"log"
+	"strings"
+
+	"github.com/spf13/viper"
+)
+
+type Config struct {
+	AppName    string `mapstructure:"APP_NAME"`
+	Port       string `mapstructure:"PORT"`
+	DatabaseURL string `mapstructure:"DATABASE_URL"`
+	JWTSecret  string `mapstructure:"JWT_SECRET"`
+	Env        string `mapstructure:"ENV"`
+}
+
+// LoadConfig initializes and loads configuration from .env or environment variables.
+func LoadConfig(configPath string) (*Config, error) {
+	viper.SetConfigName("config")    // Name of the .env file (without extension)
+	viper.SetConfigType("env")       // Type of the config file
+	viper.AddConfigPath(configPath)  // Path to look for the .env file
+	viper.AutomaticEnv()             // Automatically override values with environment variables
+
+	// Transform environment variables to match the expected format
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// Set default values
+	viper.SetDefault("APP_NAME", "MyApp")
+	viper.SetDefault("PORT", "8080")
+	viper.SetDefault("ENV", "development")
+
+	// Read from file
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("Config file not found, falling back to environment variables: %v\n", err)
+	}
+
+	// Unmarshal into the Config struct
+	var config Config
+	if err := viper.Unmarshal(&config); err != nil {
+		return nil, err
+	}
+
+	// Validate critical values
+	if config.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required but not set")
+	}
+
+	if config.JWTSecret == "" {
+		log.Fatal("JWT_SECRET is required but not set")
+	}
+
+	return &config, nil
+}
+```
+
+### Usage
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"your_project/config"
+)
+
+func main() {
+	// Pass the path where the .env file is located (e.g., ".")
+	conf, err := config.LoadConfig(".")
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Use your configuration
+	fmt.Printf("App Name: %s\n", conf.AppName)
+	fmt.Printf("Port: %s\n", conf.Port)
+	fmt.Printf("Database URL: %s\n", conf.DatabaseURL)
+	fmt.Printf("Environment: %s\n", conf.Env)
+}
+```
+
+### Explanation of Features:
+1. **Dynamic `.env` Loading**: The function reads from a `.env` file or falls back to environment variables.
+2. **Default Values**: It provides sensible defaults for some critical configurations.
+3. **Error Handling**: Ensures that critical values like `DATABASE_URL` and `JWT_SECRET` are not empty.
+4. **Environment Overriding**: `viper.AutomaticEnv` allows overwriting `.env` values with environment variables in deployment environments.
+5. **Environment Variable Key Replacer**: Converts nested keys (`ENV_KEY`) to match the Go struct's snake_case format.
+
+### Folder Structure Suggestion
+To organize this, you can use the following structure:
+
+```
+project/
+├── config/
+│   └── config.go
+├── .env
+├── main.go
+├── go.mod
+```
+
+### Example `.env` File
+
+```env
+APP_NAME=PetDaycare
+PORT=3000
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+JWT_SECRET=supersecretkey
+ENV=production
+```
+
+This structure is scalable and reusable for any Go project! Let me know if you'd like further customizations.

@@ -1,0 +1,349 @@
+Dependency Injection (DI) is a **design pattern** used to achieve **Inversion of Control (IoC)**, which improves the modularity, testability, and flexibility of your code. DI allows you to provide the dependencies (external services, configurations, or objects) that a class or function needs from the outside, rather than creating them internally. 
+
+In this guide, we’ll cover DI **step-by-step**, starting from the basics and building up to advanced usage, focusing on Go.
+
+---
+
+### **1. Understanding Dependency Injection**
+A dependency is any external object or service that a component relies on. In Go, this could be a database connection, configuration settings, or even other services.
+
+#### **Basic Example Without DI (Tight Coupling)**
+```go
+package main
+
+import "fmt"
+
+// Service is tightly coupled to its dependency
+type Service struct {
+	logger *Logger
+}
+
+func NewService() *Service {
+	logger := &Logger{} // The Service directly creates its dependency
+	return &Service{logger: logger}
+}
+
+func (s *Service) DoSomething() {
+	s.logger.Log("Doing something...")
+}
+
+type Logger struct{}
+
+func (l *Logger) Log(message string) {
+	fmt.Println(message)
+}
+
+func main() {
+	service := NewService()
+	service.DoSomething()
+}
+```
+Here:
+- `Service` depends on `Logger`.
+- The `Logger` is created inside `NewService`, making it hard to replace `Logger` with a mock or a different implementation.
+
+#### **With DI (Loose Coupling)**
+```go
+package main
+
+import "fmt"
+
+// Service depends on an externally provided Logger
+type Service struct {
+	logger *Logger
+}
+
+func NewService(logger *Logger) *Service {
+	return &Service{logger: logger}
+}
+
+func (s *Service) DoSomething() {
+	s.logger.Log("Doing something...")
+}
+
+type Logger struct{}
+
+func (l *Logger) Log(message string) {
+	fmt.Println(message)
+}
+
+func main() {
+	logger := &Logger{} // Create the dependency externally
+	service := NewService(logger)
+	service.DoSomething()
+}
+```
+Now:
+- `Service` is no longer responsible for creating the `Logger`. It accepts it as a dependency.
+- This makes `Service` easier to test and more flexible.
+
+---
+
+### **2. Types of Dependency Injection**
+There are three main types of DI:
+
+#### 1. **Constructor Injection** (Most Common in Go)
+Dependencies are provided via the constructor function. This is the most idiomatic way in Go.
+
+#### Example:
+```go
+type Service struct {
+	logger Logger
+}
+
+func NewService(logger Logger) *Service {
+	return &Service{logger: logger}
+}
+```
+
+#### 2. **Method Injection**
+Dependencies are provided via setter methods after the object is created.
+
+#### Example:
+```go
+type Service struct {
+	logger Logger
+}
+
+func (s *Service) SetLogger(logger Logger) {
+	s.logger = logger
+}
+```
+
+#### 3. **Interface Injection**
+Dependencies are passed through an interface. Go doesn't use this pattern often but may achieve similar results using interfaces and embedding.
+
+---
+
+### **3. Advantages of Dependency Injection**
+1. **Testability**: You can inject mocks or stubs for dependencies.
+2. **Modularity**: Components are less tightly coupled, making them easier to modify or extend.
+3. **Flexibility**: Swap out implementations of dependencies easily (e.g., replace a database with an in-memory store during testing).
+4. **Clearer Code**: Responsibilities are separated; a service doesn't need to worry about creating its dependencies.
+
+---
+
+### **4. DI in Practice**
+Let’s build a more complex example step by step.
+
+#### **Step 1: Define Interfaces for Abstractions**
+Instead of directly depending on concrete implementations, depend on abstractions (interfaces).
+
+```go
+package main
+
+import "fmt"
+
+// Logger is an abstraction (interface)
+type Logger interface {
+	Log(message string)
+}
+
+// Service depends on a Logger interface
+type Service struct {
+	logger Logger
+}
+
+func NewService(logger Logger) *Service {
+	return &Service{logger: logger}
+}
+
+func (s *Service) DoSomething() {
+	s.logger.Log("Service is doing something!")
+}
+
+// ConsoleLogger is a concrete implementation of Logger
+type ConsoleLogger struct{}
+
+func (cl *ConsoleLogger) Log(message string) {
+	fmt.Println("[Console]", message)
+}
+```
+
+#### **Step 2: Use Constructor Injection**
+Create dependencies in `main.go` or an external initializer:
+
+```go
+func main() {
+	logger := &ConsoleLogger{}         // Concrete implementation
+	service := NewService(logger)      // Inject the dependency
+	service.DoSomething()
+}
+```
+
+#### **Step 3: Add Another Implementation**
+Easily swap `ConsoleLogger` with another implementation (e.g., `FileLogger`).
+
+```go
+type FileLogger struct{}
+
+func (fl *FileLogger) Log(message string) {
+	fmt.Println("[File] Writing log:", message) // Replace with actual file I/O logic
+}
+
+func main() {
+	logger := &FileLogger{} // Swap implementation
+	service := NewService(logger)
+	service.DoSomething()
+}
+```
+
+---
+
+### **5. Dependency Injection in Larger Applications**
+When working on larger applications, consider using DI containers or patterns to manage complex dependency graphs.
+
+#### Example: Dependency Injection in a Web Application
+Let’s say we have a web application with:
+- A `UserService` that depends on a `UserRepository`.
+- A `UserRepository` that interacts with a database.
+
+#### **Step 1: Define Interfaces**
+```go
+package services
+
+type UserRepository interface {
+	FindUserByID(id int) (*User, error)
+}
+
+type UserService struct {
+	repo UserRepository
+}
+
+func NewUserService(repo UserRepository) *UserService {
+	return &UserService{repo: repo}
+}
+
+func (s *UserService) GetUserByID(id int) (*User, error) {
+	return s.repo.FindUserByID(id)
+}
+
+type User struct {
+	ID   int
+	Name string
+}
+```
+
+#### **Step 2: Implement the Repository**
+```go
+package repositories
+
+import (
+	"errors"
+	"services"
+)
+
+type InMemoryUserRepository struct {
+	data map[int]*services.User
+}
+
+func NewInMemoryUserRepository() *InMemoryUserRepository {
+	return &InMemoryUserRepository{
+		data: map[int]*services.User{
+			1: {ID: 1, Name: "John Doe"},
+		},
+	}
+}
+
+func (repo *InMemoryUserRepository) FindUserByID(id int) (*services.User, error) {
+	if user, ok := repo.data[id]; ok {
+		return user, nil
+	}
+	return nil, errors.New("user not found")
+}
+```
+
+#### **Step 3: Wire Dependencies in `main.go`**
+```go
+package main
+
+import (
+	"fmt"
+	"repositories"
+	"services"
+)
+
+func main() {
+	repo := repositories.NewInMemoryUserRepository() // Dependency 1
+	service := services.NewUserService(repo)         // Dependency 2
+
+	user, err := service.GetUserByID(1)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println("User found:", user.Name)
+}
+```
+
+---
+
+### **6. Advanced Dependency Injection with a DI Container**
+In very large applications, managing dependencies manually can get tedious. A **DI container** can help.
+
+#### Popular DI Libraries in Go:
+- **[dig](https://github.com/uber-go/dig)** (by Uber)
+- **[wire](https://github.com/google/wire)** (by Google)
+
+---
+
+#### **Example with `dig`**
+Here’s a simple example of using `dig`:
+
+```go
+package main
+
+import (
+	"fmt"
+	"go.uber.org/dig"
+)
+
+// Example structs
+type Logger struct{}
+
+func (l *Logger) Log(message string) {
+	fmt.Println(message)
+}
+
+type Service struct {
+	Logger *Logger
+}
+
+func NewLogger() *Logger {
+	return &Logger{}
+}
+
+func NewService(logger *Logger) *Service {
+	return &Service{Logger: logger}
+}
+
+func (s *Service) DoSomething() {
+	s.Logger.Log("Service is doing something!")
+}
+
+func main() {
+	container := dig.New()
+
+	// Provide dependencies
+	container.Provide(NewLogger)
+	container.Provide(NewService)
+
+	// Invoke the function
+	err := container.Invoke(func(service *Service) {
+		service.DoSomething()
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+```
+
+---
+
+### **Key Takeaways**
+1. **Start with Simple Constructor Injection**: Most Go apps don’t need a DI container.
+2. **Use Interfaces for Abstractions**: This keeps your code decoupled.
+3. **Consider DI Libraries for Larger Apps**: When dependencies grow complex, DI frameworks like `dig` or `wire` help.
+
+DI is a powerful concept that ensures modular, testable, and maintainable code. Let me know if you'd like to explore any specific aspect further!
